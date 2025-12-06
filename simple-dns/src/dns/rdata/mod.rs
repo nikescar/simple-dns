@@ -96,6 +96,12 @@ pub use rrsig::RRSIG;
 mod ds;
 pub use ds::DS;
 
+mod cds;
+pub use cds::CDS;
+
+mod cdnskey;
+pub use cdnskey::CDNSKEY;
+
 mod nsec;
 pub use nsec::{NsecTypeBitMap, NSEC};
 
@@ -201,6 +207,8 @@ macros::rdata_enum! {
     DNSKEY<'a>,
     RRSIG<'a>,
     DS<'a>,
+    CDS<'a>,
+    CDNSKEY<'a>,
     NSEC<'a>,
     DHCID<'a>,
 }
