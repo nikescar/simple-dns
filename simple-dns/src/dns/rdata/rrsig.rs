@@ -1,8 +1,9 @@
 use crate::{
     bytes_buffer::BytesBuffer,
     dns::{Name, WireFormat},
+    lib::Cow,
+    lib::Write,
 };
-use std::borrow::Cow;
 
 use super::RR;
 
@@ -64,7 +65,7 @@ impl<'a> WireFormat<'a> for RRSIG<'a> {
         })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.type_covered.to_be_bytes())?;
         out.write_all(&[self.algorithm])?;
         out.write_all(&[self.labels])?;
@@ -103,10 +104,7 @@ impl RRSIG<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        rdata::{RData, A},
-        ResourceRecord,
-    };
+    use crate::{lib::Vec, rdata::A};
 
     #[test]
     fn parse_and_write_rrsig() {
@@ -129,7 +127,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/RRSIG.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut sample_file[..].into())?.rdata {

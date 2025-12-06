@@ -26,8 +26,8 @@ pub use rdata::TYPE;
 mod resource_record;
 pub use resource_record::ResourceRecord;
 
+use crate::lib::TryFrom;
 use bitflags::bitflags;
-use std::convert::TryFrom;
 
 const MAX_LABEL_LENGTH: usize = 63;
 const MAX_NAME_LENGTH: usize = 255;

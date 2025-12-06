@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
     bytes_buffer::BytesBuffer,
-    dns::{name::Label, Name, WireFormat},
+    dns::{Name, WireFormat},
+    lib::{Seek, Write},
 };
 
 use super::RR;
@@ -43,15 +42,15 @@ impl<'a> WireFormat<'a> for AFSDB<'a> {
         Ok(Self { subtype, hostname })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.subtype.to_be_bytes())?;
         self.hostname.write_to(out)
     }
 
-    fn write_compressed_to<T: std::io::Write + std::io::Seek>(
+    fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[crate::Label<'a>], u16>,
     ) -> crate::Result<()> {
         out.write_all(&self.subtype.to_be_bytes())?;
         self.hostname.write_compressed_to(out, name_refs)
@@ -64,7 +63,7 @@ impl<'a> WireFormat<'a> for AFSDB<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{rdata::RData, ResourceRecord};
+    use crate::lib::{ToString, Vec};
 
     use super::*;
 
@@ -88,7 +87,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/AFSDB.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut BytesBuffer::new(&sample_file))?.rdata {

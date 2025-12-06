@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
     bytes_buffer::BytesBuffer,
-    dns::{name::Label, Name, WireFormat},
+    dns::{Name, WireFormat},
+    lib::{Seek, Write},
 };
 
 use super::RR;
@@ -42,15 +41,15 @@ impl<'a> WireFormat<'a> for RP<'a> {
         Ok(RP { mbox, txt })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         self.mbox.write_to(out)?;
         self.txt.write_to(out)
     }
 
-    fn write_compressed_to<T: std::io::Write + std::io::Seek>(
+    fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[crate::Label<'a>], u16>,
     ) -> crate::Result<()> {
         self.mbox.write_compressed_to(out, name_refs)?;
         self.txt.write_compressed_to(out, name_refs)
@@ -63,9 +62,9 @@ impl<'a> WireFormat<'a> for RP<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{rdata::RData, ResourceRecord};
 
     use super::*;
+    use crate::lib::{ToString, Vec};
 
     #[test]
     fn parse_and_write_rp() {
@@ -87,7 +86,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/RP.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut sample_file[..].into())?.rdata {

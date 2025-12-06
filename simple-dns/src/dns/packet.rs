@@ -1,10 +1,10 @@
-use std::{
-    collections::HashMap,
-    io::{Cursor, Seek, Write},
-};
-
 use super::{Header, PacketFlag, Question, ResourceRecord, WireFormat, OPCODE};
-use crate::{bytes_buffer::BytesBuffer, rdata::OPT, RCODE};
+use crate::{
+    bytes_buffer::BytesBuffer,
+    lib::{Seek, Vec, Write},
+    rdata::OPT,
+    RCODE,
+};
 
 /// Represents a DNS message packet
 ///
@@ -154,11 +154,10 @@ impl<'a> Packet<'a> {
     ///
     /// This call will allocate a `Vec<u8>` of 900 bytes, which is enough for a jumbo UDP packet
     pub fn build_bytes_vec(&self) -> crate::Result<Vec<u8>> {
-        let mut out = Cursor::new(Vec::with_capacity(900));
-
+        let mut out = Vec::with_capacity(900);
         self.write_to(&mut out)?;
 
-        Ok(out.into_inner())
+        Ok(out)
     }
 
     /// Creates a new [Vec`<u8>`](`Vec<T>`) and write the contents of this package in wire format
@@ -166,7 +165,7 @@ impl<'a> Packet<'a> {
     ///
     /// This call will allocate a `Vec<u8>` of 900 bytes, which is enough for a jumbo UDP packet
     pub fn build_bytes_vec_compressed(&self) -> crate::Result<Vec<u8>> {
-        let mut out = Cursor::new(Vec::with_capacity(900));
+        let mut out = crate::lib::Cursor::new(Vec::with_capacity(900));
         self.write_compressed_to(&mut out)?;
 
         Ok(out.into_inner())
@@ -202,7 +201,7 @@ impl<'a> Packet<'a> {
     pub fn write_compressed_to<T: Write + Seek>(&self, out: &mut T) -> crate::Result<()> {
         self.write_header(out)?;
 
-        let mut name_refs = HashMap::new();
+        let mut name_refs = Default::default();
         for e in &self.questions {
             e.write_compressed_to(out, &mut name_refs)?;
         }
@@ -238,10 +237,9 @@ impl<'a> Packet<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{dns::CLASS, dns::TYPE, SimpleDnsError};
+    use crate::{dns::CLASS, dns::TYPE, lib::ToString, SimpleDnsError};
 
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn parse_without_data_should_not_panic() {

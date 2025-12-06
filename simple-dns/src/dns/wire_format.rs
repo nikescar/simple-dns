@@ -1,11 +1,7 @@
-use std::{
-    collections::HashMap,
-    io::{Seek, Write},
+use crate::{
+    bytes_buffer::BytesBuffer,
+    lib::{Seek, Write},
 };
-
-use crate::bytes_buffer::BytesBuffer;
-
-use super::name::Label;
 
 /// Represents anything that can be part of a dns packet (Question, Resource Record, RData)
 pub(crate) trait WireFormat<'a> {
@@ -24,7 +20,7 @@ pub(crate) trait WireFormat<'a> {
     fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        _name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        _name_refs: &mut crate::lib::BTreeMap<&[crate::Label<'a>], u16>,
     ) -> crate::Result<()> {
         self.write_to(out)
     }

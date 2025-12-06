@@ -1,6 +1,4 @@
-use crate::bytes_buffer::BytesBuffer;
-use crate::dns::WireFormat;
-use crate::Name;
+use crate::{bytes_buffer::BytesBuffer, dns::WireFormat, lib::Write, Name};
 
 use super::RR;
 
@@ -57,7 +55,7 @@ impl<'a> WireFormat<'a> for SRV<'a> {
         })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.priority.to_be_bytes())?;
         out.write_all(&self.weight.to_be_bytes())?;
         out.write_all(&self.port.to_be_bytes())?;
@@ -72,11 +70,8 @@ impl<'a> WireFormat<'a> for SRV<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, io::Cursor};
-
-    use crate::{rdata::RData, ResourceRecord};
-
     use super::*;
+    use crate::lib::Vec;
 
     #[test]
     fn parse_and_write_srv() {
@@ -102,6 +97,8 @@ mod tests {
 
     #[test]
     fn srv_should_not_be_compressed() {
+        use crate::lib::Cursor;
+
         let srv = SRV {
             priority: 1,
             weight: 2,
@@ -111,7 +108,7 @@ mod tests {
 
         let mut plain = Vec::new();
         let mut compressed = Cursor::new(Vec::new());
-        let mut names = HashMap::new();
+        let mut names = Default::default();
 
         assert!(srv.write_to(&mut plain).is_ok());
         assert!(srv.write_compressed_to(&mut compressed, &mut names).is_ok());
@@ -120,7 +117,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/SRV.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut sample_file[..].into())?.rdata {

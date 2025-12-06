@@ -21,6 +21,7 @@ fn packet_questions() -> Vec<u8> {
 
     query.build_bytes_vec().unwrap()
 }
+
 fn packet_questions_compressed() -> Vec<u8> {
     let mut query = Packet::new_query(1);
 

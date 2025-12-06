@@ -1,8 +1,7 @@
-use std::borrow::Cow;
-
 use crate::{
     bytes_buffer::BytesBuffer,
     dns::{CharacterString, WireFormat},
+    lib::{Cow, Write},
 };
 
 use super::RR;
@@ -50,7 +49,7 @@ impl<'a> WireFormat<'a> for CAA<'a> {
         Ok(Self { flag, tag, value })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.flag.to_be_bytes())?;
         self.tag.write_to(out)?;
         //FIXME: add quotes if the value is not already quoted
@@ -65,9 +64,8 @@ impl<'a> WireFormat<'a> for CAA<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{rdata::RData, Packet, ResourceRecord, CLASS};
-
     use super::*;
+    use crate::lib::{ToString, Vec};
 
     #[test]
     fn parse_and_write_caa() {
@@ -92,6 +90,8 @@ mod tests {
 
     #[test]
     fn parse_rdata_with_multiple_caa_records() {
+        use crate::{rdata::RData, Packet, ResourceRecord, CLASS};
+
         let mut packet = Packet::new_query(0);
         packet.answers.push(ResourceRecord::new(
             "caa.xxx.com".try_into().unwrap(),

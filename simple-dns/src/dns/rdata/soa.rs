@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
     bytes_buffer::BytesBuffer,
-    dns::{name::Label, Name, WireFormat},
+    dns::{Name, WireFormat},
+    lib::{Seek, Write},
 };
 
 use super::RR;
@@ -45,7 +44,7 @@ impl SOA<'_> {
         }
     }
 
-    fn write_common<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_common<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.serial.to_be_bytes())?;
         out.write_all(&self.refresh.to_be_bytes())?;
         out.write_all(&self.retry.to_be_bytes())?;
@@ -83,16 +82,16 @@ impl<'a> WireFormat<'a> for SOA<'a> {
         })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         self.mname.write_to(out)?;
         self.rname.write_to(out)?;
         self.write_common(out)
     }
 
-    fn write_compressed_to<T: std::io::Write + std::io::Seek>(
+    fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[crate::Label<'a>], u16>,
     ) -> crate::Result<()> {
         self.mname.write_compressed_to(out, name_refs)?;
         self.rname.write_compressed_to(out, name_refs)?;
@@ -106,7 +105,7 @@ impl<'a> WireFormat<'a> for SOA<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{rdata::RData, ResourceRecord};
+    use crate::lib::Vec;
 
     use super::*;
     #[test]
@@ -132,7 +131,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_soa_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/SOA.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut sample_file[..].into())?.rdata {
@@ -144,8 +145,8 @@ mod tests {
         assert_eq!(
             sample_rdata.rname,
             [
-                Label::new_unchecked(b"Action.domains"),
-                Label::new_unchecked(b"sample")
+                crate::Label::new_unchecked(b"Action.domains"),
+                crate::Label::new_unchecked(b"sample")
             ]
             .into()
         );

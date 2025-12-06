@@ -1,4 +1,5 @@
-use std::{array::TryFromSliceError, error::Error, fmt::Display};
+use crate::lib::fmt::{Display, Formatter, Result};
+use crate::lib::{Error, FromUtf8Error, TryFromSliceError};
 
 /// Error types for SimpleDns
 #[derive(Debug, PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub enum SimpleDnsError {
     /// Failed to write the packet to the provided buffer
     FailedToWrite,
     /// Invalid utf8 string
-    InvalidUtf8String(std::string::FromUtf8Error),
+    InvalidUtf8String(FromUtf8Error),
 }
 
 impl From<TryFromSliceError> for SimpleDnsError {
@@ -36,6 +37,7 @@ impl From<TryFromSliceError> for SimpleDnsError {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<std::io::Error> for SimpleDnsError {
     fn from(_value: std::io::Error) -> Self {
         Self::FailedToWrite
@@ -45,16 +47,16 @@ impl From<std::io::Error> for SimpleDnsError {
 impl Error for SimpleDnsError {}
 
 impl Display for SimpleDnsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             SimpleDnsError::InvalidClass(class) => {
-                write!(f, "Provided class is invalid: {0}", class)
+                write!(f, "Provided class is invalid: {class}")
             }
             SimpleDnsError::InvalidQClass(qclass) => {
-                write!(f, "Provided Qclass is invalid: {0}", qclass)
+                write!(f, "Provided Qclass is invalid: {qclass}")
             }
             SimpleDnsError::InvalidQType(qtype) => {
-                write!(f, "Provided QType is invalid: {0}", qtype)
+                write!(f, "Provided QType is invalid: {qtype}")
             }
             SimpleDnsError::InvalidServiceName => write!(f, "Provided service name is not valid"),
             SimpleDnsError::InvalidServiceLabel => {
@@ -77,7 +79,7 @@ impl Display for SimpleDnsError {
                 write!(f, "Failed to write the packet to provided buffer")
             }
             SimpleDnsError::InvalidUtf8String(e) => {
-                write!(f, "Invalid utf8 string: {}", e)
+                write!(f, "Invalid utf8 string: {e}")
             }
         }
     }

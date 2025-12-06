@@ -1,6 +1,4 @@
-use std::io::Write;
-
-use crate::{bytes_buffer::BytesBuffer, rdata::OPT, ResourceRecord};
+use crate::{bytes_buffer::BytesBuffer, lib::Write, rdata::OPT, ResourceRecord};
 
 use super::{PacketFlag, OPCODE, RCODE};
 
@@ -126,7 +124,7 @@ impl<'a> Header<'a> {
         flags
     }
 
-    pub(crate) fn opt_rr(&self) -> Option<ResourceRecord> {
+    pub(crate) fn opt_rr(&self) -> Option<ResourceRecord<'a>> {
         self.opt.as_ref().map(|opt| {
             ResourceRecord::new(
                 [].into(),
@@ -151,6 +149,7 @@ impl<'a> Header<'a> {
 #[cfg(test)]
 mod tests {
     use crate::header_buffer;
+    use crate::lib::vec;
 
     use super::*;
 

@@ -1,6 +1,10 @@
-use std::borrow::Cow;
-
-use crate::{bytes_buffer::BytesBuffer, dns::WireFormat, Name};
+use crate::{
+    bytes_buffer::BytesBuffer,
+    dns::WireFormat,
+    lib::{Cow, Vec},
+    lib::Write,
+    Name,
+};
 
 use super::RR;
 
@@ -65,7 +69,7 @@ impl<'a> WireFormat<'a> for NSEC<'a> {
         })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         self.next_name.write_to(out)?;
 
         let mut sorted = self.type_bit_maps.clone();
@@ -81,8 +85,18 @@ impl<'a> WireFormat<'a> for NSEC<'a> {
     }
 
     fn len(&self) -> usize {
-        self.next_name.len()
-    }
+      let mut total = self.next_name.len();
+
+      // Add size for each type bitmap window:
+      // Each window has: 1 byte (window_block) + 1 byte (bitmap length) + bitmap bytes
+      for bitmap in &self.type_bit_maps {
+          total += 1;  // window_block byte
+          total += 1;  // bitmap length byte
+          total += bitmap.bitmap.len();  // bitmap data
+      }
+
+      total
+  }
 }
 
 impl NSEC<'_> {
@@ -105,9 +119,9 @@ impl NSEC<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{rdata::RData, ResourceRecord};
 
     use super::*;
+    use crate::lib::vec;
 
     #[test]
     fn parse_and_write_nsec() {
@@ -129,7 +143,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         let sample_file = std::fs::read("samples/zonefile/NSEC.sample")?;
 
         let sample_rdata = match ResourceRecord::parse(&mut sample_file[..].into())?.rdata {

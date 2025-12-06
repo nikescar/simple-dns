@@ -1,9 +1,5 @@
-use std::collections::BTreeSet;
-use std::{borrow::Cow, collections::BTreeMap};
-
-use crate::bytes_buffer::BytesBuffer;
-use crate::dns::WireFormat;
-use crate::{CharacterString, Name};
+use crate::lib::{BTreeMap, BTreeSet, Cow, Vec};
+use crate::{bytes_buffer::BytesBuffer, dns::WireFormat, lib::Write, CharacterString, Name};
 
 use super::RR;
 
@@ -112,7 +108,7 @@ impl<'a> SVCB<'a> {
     }
 
     /// Iterates over all parameters.
-    pub fn iter_params(&self) -> impl Iterator<Item = &SVCParam> {
+    pub fn iter_params(&self) -> impl Iterator<Item = &SVCParam<'a>> {
         self.params.values()
     }
 
@@ -163,7 +159,7 @@ impl<'a> WireFormat<'a> for SVCB<'a> {
         })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.priority.to_be_bytes())?;
         self.target.write_to(out)?;
         for param in self.params.values() {
@@ -307,7 +303,7 @@ impl<'a> WireFormat<'a> for SVCParam<'a> {
         }
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.key_code().to_be_bytes())?;
         out.write_all(&(self.len() as u16 - 4).to_be_bytes())?;
 
@@ -369,10 +365,11 @@ impl<'a> WireFormat<'a> for SVCParam<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{rdata::RData, ResourceRecord};
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
         // Copy of the answer from `dig crypto.cloudflare.com -t HTTPS`.
         let sample_file = std::fs::read("samples/zonefile/HTTPS.sample")?;
 

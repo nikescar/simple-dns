@@ -1,8 +1,8 @@
-use std::{collections::HashMap, convert::TryFrom};
-
-use crate::bytes_buffer::BytesBuffer;
-
-use super::{name::Label, Name, WireFormat, QCLASS, QTYPE};
+use super::{Name, WireFormat, QCLASS, QTYPE};
+use crate::{
+    bytes_buffer::BytesBuffer,
+    lib::{Seek, TryFrom, Write},
+};
 
 /// Question represents a query in the DNS Packet
 #[derive(Debug, Clone)]
@@ -39,15 +39,16 @@ impl<'a> Question<'a> {
         }
     }
 
-    fn write_common<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_common<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         let qclass: u16 = match self.unicast_response {
             true => Into::<u16>::into(self.qclass) | 0x8000,
             false => self.qclass.into(),
         };
 
         out.write_all(&Into::<u16>::into(self.qtype).to_be_bytes())?;
-        out.write_all(&qclass.to_be_bytes())
-            .map_err(crate::SimpleDnsError::from)
+        out.write_all(&qclass.to_be_bytes())?;
+
+        Ok(())
     }
 }
 
@@ -73,15 +74,15 @@ impl<'a> WireFormat<'a> for Question<'a> {
         self.qname.len() + Self::MINIMUM_LEN
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         self.qname.write_to(out)?;
         self.write_common(out)
     }
 
-    fn write_compressed_to<T: std::io::Write + std::io::Seek>(
+    fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[crate::Label<'a>], u16>,
     ) -> crate::Result<()> {
         self.qname.write_compressed_to(out, name_refs)?;
         self.write_common(out)
@@ -90,10 +91,9 @@ impl<'a> WireFormat<'a> for Question<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{CLASS, TYPE};
+    use crate::{lib::Vec, CLASS, TYPE};
 
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn parse_question() {

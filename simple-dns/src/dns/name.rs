@@ -1,6 +1,10 @@
-use std::{borrow::Cow, collections::HashMap, convert::TryFrom, fmt::Display, hash::Hash};
-
-use crate::bytes_buffer::BytesBuffer;
+use crate::{
+    bytes_buffer::BytesBuffer,
+    lib::{
+        fmt::{Debug, Display, Formatter, Result as FmtResult},
+        format, Cow, Hash, Hasher, Iter, Seek, String, ToString, TryFrom, Vec, Write,
+    },
+};
 
 use super::{WireFormat, MAX_LABEL_LENGTH, MAX_NAME_LENGTH};
 
@@ -69,7 +73,7 @@ impl<'a> Name<'a> {
     }
 
     /// Returns an Iter of this Name Labels
-    pub fn iter(&'a self) -> std::slice::Iter<'a, Label<'a>> {
+    pub fn iter(&'a self) -> Iter<'a, Label<'a>> {
         self.labels.iter()
     }
 
@@ -81,6 +85,13 @@ impl<'a> Name<'a> {
                 .rev()
                 .zip(self.iter().rev())
                 .all(|(o, s)| *o == *s)
+    }
+
+    /// Transforms the inner data into its owned type
+    pub fn into_owned<'b>(self) -> Name<'b> {
+        Name {
+            labels: self.labels.into_iter().map(|l| l.into_owned()).collect(),
+        }
     }
 
     /// Returns the subdomain part of self, based on `domain`.
@@ -97,7 +108,7 @@ impl<'a> Name<'a> {
     /// let sub = name.without(&domain).unwrap();
     /// assert_eq!(sub.to_string(), "sub")
     /// ```
-    pub fn without(&self, domain: &Name) -> Option<Name> {
+    pub fn without(&'_ self, domain: &Name) -> Option<Name<'_>> {
         if self.is_subdomain_of(domain) {
             let labels = self.labels[..self.labels.len() - domain.labels.len()].to_vec();
 
@@ -107,19 +118,12 @@ impl<'a> Name<'a> {
         }
     }
 
-    /// Transforms the inner data into its owned type
-    pub fn into_owned<'b>(self) -> Name<'b> {
-        Name {
-            labels: self.labels.into_iter().map(|l| l.into_owned()).collect(),
-        }
-    }
-
     /// Get the labels that compose this name
     pub fn get_labels(&'_ self) -> &'_ [Label<'a>] {
         &self.labels[..]
     }
 
-    fn plain_append<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn plain_append<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         for label in self.iter() {
             out.write_all(&[label.len() as u8])?;
             out.write_all(&label.data)?;
@@ -129,21 +133,21 @@ impl<'a> Name<'a> {
         Ok(())
     }
 
-    fn compress_append<T: std::io::Write + std::io::Seek>(
+    fn compress_append<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[Label<'a>], u16>,
     ) -> crate::Result<()> {
         for (i, label) in self.iter().enumerate() {
             match name_refs.entry(&self.labels[i..]) {
-                std::collections::hash_map::Entry::Occupied(e) => {
-                    let p = *e.get() as u16;
+                crate::lib::BTreeEntry::Occupied(e) => {
+                    let p = *e.get();
                     out.write_all(&(p | POINTER_MASK_U16).to_be_bytes())?;
 
                     return Ok(());
                 }
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    e.insert(out.stream_position()? as usize);
+                crate::lib::BTreeEntry::Vacant(e) => {
+                    e.insert(out.stream_position()? as u16);
                     out.write_all(&[label.len() as u8])?;
                     out.write_all(&label.data)?;
                 }
@@ -227,14 +231,14 @@ impl<'a> WireFormat<'a> for Name<'a> {
         Ok(Self { labels })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         self.plain_append(out)
     }
 
-    fn write_compressed_to<T: std::io::Write + std::io::Seek>(
+    fn write_compressed_to<T: Write + Seek>(
         &'a self,
         out: &mut T,
-        name_refs: &mut HashMap<&'a [Label<'a>], usize>,
+        name_refs: &mut crate::lib::BTreeMap<&[Label<'a>], u16>,
     ) -> crate::Result<()> {
         self.compress_append(out, name_refs)
     }
@@ -269,23 +273,25 @@ impl<'a, const N: usize> From<[Label<'a>; N]> for Name<'a> {
 }
 
 impl Display for Name<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, label) in self.iter().enumerate() {
-            if i != 0 {
-                f.write_str(".")?;
-            }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let mut labels = self.labels.iter();
 
-            f.write_fmt(format_args!("{}", label))?;
+        if let Some(label) = labels.next() {
+            f.write_fmt(format_args!("{label}"))?;
+        }
+
+        for label in labels {
+            f.write_fmt(format_args!(".{label}"))?;
         }
 
         Ok(())
     }
 }
 
-impl std::fmt::Debug for Name<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for Name<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_tuple("Name")
-            .field(&format!("{}", self))
+            .field(&format!("{self}"))
             .field(&format!("{}", self.len()))
             .finish()
     }
@@ -298,7 +304,7 @@ impl PartialEq for Name<'_> {
 }
 
 impl Hash for Name<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.labels.hash(state);
     }
 }
@@ -321,7 +327,7 @@ impl<'a> Iterator for LabelsIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         for i in self.current..self.bytes.len() {
             if self.bytes[i] == b'.' {
-                let current = std::mem::replace(&mut self.current, i + 1);
+                let current = crate::lib::mem::replace(&mut self.current, i + 1);
                 if i - current == 0 {
                     continue;
                 }
@@ -330,7 +336,7 @@ impl<'a> Iterator for LabelsIter<'a> {
         }
 
         if self.current < self.bytes.len() {
-            let current = std::mem::replace(&mut self.current, self.bytes.len());
+            let current = crate::lib::mem::replace(&mut self.current, self.bytes.len());
             Some(self.bytes[current..].into())
         } else {
             None
@@ -349,7 +355,7 @@ impl<'a> Iterator for LabelsIter<'a> {
 ///
 /// The `Display` implementation uses [`std::string::String::from_utf8_lossy`] to display the
 /// label.
-#[derive(Eq, PartialEq, Hash, Clone)]
+#[derive(Eq, PartialEq, Hash, Clone, PartialOrd, Ord)]
 pub struct Label<'a> {
     data: Cow<'a, [u8]>,
 }
@@ -420,14 +426,14 @@ impl<'a> Label<'a> {
 }
 
 impl Display for Label<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = std::string::String::from_utf8_lossy(&self.data);
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let s = String::from_utf8_lossy(&self.data);
         f.write_str(&s)
     }
 }
 
-impl std::fmt::Debug for Label<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for Label<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("Label")
             .field("data", &self.to_string())
             .finish()
@@ -442,11 +448,9 @@ impl AsRef<[u8]> for Label<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-    use std::{collections::hash_map::DefaultHasher, hash::Hasher};
-
     use super::*;
-    use crate::SimpleDnsError;
+    use crate::lib::Cursor;
+    use crate::{lib::Vec, SimpleDnsError};
 
     #[test]
     fn construct_valid_names() {
@@ -516,19 +520,19 @@ mod tests {
 
     #[test]
     fn test_write() {
-        let mut bytes = Cursor::new(Vec::with_capacity(30));
+        let mut bytes = Vec::with_capacity(30);
         Name::new_unchecked("_srv._udp.local")
             .write_to(&mut bytes)
             .unwrap();
 
-        assert_eq!(b"\x04_srv\x04_udp\x05local\x00", &bytes.get_ref()[..]);
+        assert_eq!(b"\x04_srv\x04_udp\x05local\x00", &bytes[..]);
 
-        let mut bytes = Cursor::new(Vec::with_capacity(30));
+        let mut bytes = Vec::with_capacity(30);
         Name::new_unchecked("_srv._udp.local2.")
             .write_to(&mut bytes)
             .unwrap();
 
-        assert_eq!(b"\x04_srv\x04_udp\x06local2\x00", &bytes.get_ref()[..]);
+        assert_eq!(b"\x04_srv\x04_udp\x06local2\x00", &bytes[..]);
     }
 
     #[test]
@@ -545,18 +549,18 @@ mod tests {
 
     #[test]
     fn root_name_should_write_zero() {
-        let mut bytes = Cursor::new(Vec::with_capacity(30));
+        let mut bytes = Vec::with_capacity(30);
         Name::new_unchecked(".").write_to(&mut bytes).unwrap();
 
-        assert_eq!(b"\x00", &bytes.get_ref()[..]);
+        assert_eq!(b"\x00", &bytes[..]);
     }
 
     #[test]
     fn append_to_vec_with_compression() {
-        let mut buf = Cursor::new(vec![0, 0, 0]);
+        let mut buf = Cursor::new(crate::lib::vec![0, 0, 0]);
         buf.set_position(3);
 
-        let mut name_refs = HashMap::new();
+        let mut name_refs = Default::default();
 
         let f_isi_arpa = Name::new_unchecked("F.ISI.ARPA");
         f_isi_arpa
@@ -577,8 +581,8 @@ mod tests {
 
     #[test]
     fn append_to_vec_with_compression_mult_names() {
-        let mut buf = Cursor::new(vec![]);
-        let mut name_refs = HashMap::new();
+        let mut buf = Cursor::new(Vec::new());
+        let mut name_refs = Default::default();
 
         let isi_arpa = Name::new_unchecked("ISI.ARPA");
         isi_arpa
@@ -614,8 +618,8 @@ mod tests {
 
     #[test]
     fn ensure_different_domains_are_not_compressed() {
-        let mut buf = Cursor::new(vec![]);
-        let mut name_refs = HashMap::new();
+        let mut buf = Cursor::new(Vec::new());
+        let mut name_refs = Default::default();
 
         let foo_bar_baz = Name::new_unchecked("FOO.BAR.BAZ");
         foo_bar_baz
@@ -652,18 +656,21 @@ mod tests {
 
     #[test]
     fn len() -> crate::Result<()> {
-        let mut bytes = Cursor::new(Vec::new());
+        let mut bytes = Vec::new();
         let name_one = Name::new_unchecked("ex.com.");
         name_one.write_to(&mut bytes)?;
 
-        assert_eq!(8, bytes.get_ref().len());
-        assert_eq!(bytes.get_ref().len(), name_one.len());
-        assert_eq!(
-            8,
-            Name::parse(&mut BytesBuffer::new(bytes.get_ref()))?.len()
-        );
+        assert_eq!(8, bytes.len());
+        assert_eq!(bytes.len(), name_one.len());
+        assert_eq!(8, Name::parse(&mut BytesBuffer::new(&bytes))?.len());
 
-        let mut name_refs = HashMap::new();
+        Ok(())
+    }
+
+    #[test]
+    fn len_compressed() -> crate::Result<()> {
+        let name_one = Name::new_unchecked("ex.com.");
+        let mut name_refs = Default::default();
         let mut bytes = Cursor::new(Vec::new());
         name_one.write_compressed_to(&mut bytes, &mut name_refs)?;
         name_one.write_compressed_to(&mut bytes, &mut name_refs)?;
@@ -673,7 +680,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn hash() -> crate::Result<()> {
+        fn get_hash(name: &Name) -> u64 {
+            let mut hasher = std::hash::DefaultHasher::default();
+            name.hash(&mut hasher);
+            hasher.finish()
+        }
+
         let mut data =
             BytesBuffer::new(b"\x00\x00\x00\x01F\x03ISI\x04ARPA\x00\x03FOO\xc0\x03\x03BAR\xc0\x03");
         data.advance(3)?;
@@ -689,12 +703,6 @@ mod tests {
         );
 
         Ok(())
-    }
-
-    fn get_hash(name: &Name) -> u64 {
-        let mut hasher = DefaultHasher::default();
-        name.hash(&mut hasher);
-        hasher.finish()
     }
 
     #[test]

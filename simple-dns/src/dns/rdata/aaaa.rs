@@ -1,5 +1,8 @@
-use crate::{bytes_buffer::BytesBuffer, dns::WireFormat};
-use std::net::Ipv6Addr;
+use crate::{
+    bytes_buffer::BytesBuffer,
+    dns::WireFormat,
+    lib::{Ipv6Addr, Write},
+};
 
 use super::RR;
 
@@ -24,9 +27,8 @@ impl WireFormat<'_> for AAAA {
         data.get_u128().map(|address| Self { address })
     }
 
-    fn write_to<T: std::io::Write>(&self, out: &mut T) -> crate::Result<()> {
+    fn write_to<T: Write>(&self, out: &mut T) -> crate::Result<()> {
         out.write_all(&self.address.to_be_bytes())
-            .map_err(crate::SimpleDnsError::from)
     }
 }
 
@@ -45,15 +47,14 @@ impl From<Ipv6Addr> for AAAA {
 
 #[cfg(test)]
 mod tests {
-    use std::{net::Ipv6Addr, str::FromStr};
-
-    use crate::{rdata::RData, ResourceRecord};
+    use crate::lib::FromStr;
+    use crate::lib::Vec;
 
     use super::*;
 
     #[test]
     fn parse_and_write_a() {
-        let address = std::net::Ipv6Addr::from_str("FF02::FB").unwrap();
+        let address = Ipv6Addr::from_str("FF02::FB").unwrap();
         let aaaa = AAAA {
             address: address.into(),
         };
@@ -70,7 +71,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn parse_sample() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{rdata::RData, ResourceRecord};
+
         let sample_file = std::fs::read("samples/zonefile/AAAA.sample")?;
         let sample_ip: u128 = "fd92:7065:b8e:ffff::5".parse::<Ipv6Addr>()?.into();
 
