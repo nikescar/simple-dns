@@ -102,6 +102,9 @@ pub use cds::CDS;
 mod cdnskey;
 pub use cdnskey::CDNSKEY;
 
+mod openpgpkey;
+pub use openpgpkey::OPENPGPKEY;
+
 mod nsec;
 pub use nsec::{NsecTypeBitMap, NSEC};
 
@@ -209,6 +212,7 @@ macros::rdata_enum! {
     DS<'a>,
     CDS<'a>,
     CDNSKEY<'a>,
+    OPENPGPKEY<'a>,
     NSEC<'a>,
     DHCID<'a>,
 }
