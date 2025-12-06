@@ -111,6 +111,9 @@ pub use nsec::{NsecTypeBitMap, NSEC};
 mod dhcid;
 pub use dhcid::DHCID;
 
+mod sshfp;
+pub use sshfp::SSHFP;
+
 pub(crate) trait RR {
     const TYPE_CODE: u16;
 }
@@ -215,6 +218,7 @@ macros::rdata_enum! {
     OPENPGPKEY<'a>,
     NSEC<'a>,
     DHCID<'a>,
+    SSHFP<'a>,
 }
 
 /*
