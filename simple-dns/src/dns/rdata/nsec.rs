@@ -85,8 +85,18 @@ impl<'a> WireFormat<'a> for NSEC<'a> {
     }
 
     fn len(&self) -> usize {
-        self.next_name.len()
-    }
+      let mut total = self.next_name.len();
+
+      // Add size for each type bitmap window:
+      // Each window has: 1 byte (window_block) + 1 byte (bitmap length) + bitmap bytes
+      for bitmap in &self.type_bit_maps {
+          total += 1;  // window_block byte
+          total += 1;  // bitmap length byte
+          total += bitmap.bitmap.len();  // bitmap data
+      }
+
+      total
+  }
 }
 
 impl NSEC<'_> {
