@@ -114,6 +114,9 @@ pub use dhcid::DHCID;
 mod sshfp;
 pub use sshfp::SSHFP;
 
+mod uri;
+pub use uri::URI;
+
 pub(crate) trait RR {
     const TYPE_CODE: u16;
 }
@@ -219,6 +222,7 @@ macros::rdata_enum! {
     NSEC<'a>,
     DHCID<'a>,
     SSHFP<'a>,
+    URI<'a>,
 }
 
 /*
